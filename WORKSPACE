@@ -41,6 +41,7 @@ http_archive(
   sha256 = "95b097a014cb329213fa647efafba286bac75126a964dda08f62cbaf95aba42d",
   strip_prefix = "mediapipe-0.8.3.1",
   patches = [
+      "@//third_party:mediapipe_opencv.diff",
       "@//third_party:mediapipe_android.diff",
       "@//third_party:mediapipe_ios.diff",
       "@//third_party:mediapipe_visibility.diff",
@@ -223,7 +224,8 @@ http_archive(
 
 http_archive(
     name = "opencv",
-    build_file_content = all_content,
+    build_file = "@//third_party:opencv.BUILD",
+    sha256 = "1ed6f5b02a7baf14daca04817566e7c98ec668cec381e0edf534fa49f10f58a2",
     strip_prefix = "opencv-3.4.10",
     urls = ["https://github.com/opencv/opencv/archive/3.4.10.tar.gz"],
 )

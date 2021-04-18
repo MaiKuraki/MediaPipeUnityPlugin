@@ -56,17 +56,9 @@ cc_library(
 alias(
     name = "opencv",
     actual = select({
-        "@com_google_mediapipe//mediapipe:android_x86": "@android_opencv//:libopencv_x86",
-        "@com_google_mediapipe//mediapipe:android_x86_64": "@android_opencv//:libopencv_x86_64",
-        "@com_google_mediapipe//mediapipe:android_armeabi": "@android_opencv//:libopencv_armeabi-v7a",
-        "@com_google_mediapipe//mediapipe:android_arm": "@android_opencv//:libopencv_armeabi-v7a",
-        "@com_google_mediapipe//mediapipe:android_arm64": "@android_opencv//:libopencv_arm64-v8a",
-        "@com_google_mediapipe//mediapipe:ios": "@ios_opencv//:opencv",
-        "@com_google_mediapipe//mediapipe:macos": "@macos_opencv//:opencv",
-        "@com_google_mediapipe//mediapipe:windows": "@windows_opencv//:opencv",
-        "//conditions:default": "@linux_opencv//:opencv",
+        "@opencv//:source_build": "@opencv//:opencv_cmake",
+        "//conditions:default": "@com_google_mediapipe//third_party:opencv_binary",
     }),
-    visibility = ["//visibility:public"],
 )
 
 cc_library(

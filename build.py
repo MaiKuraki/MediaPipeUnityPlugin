@@ -27,8 +27,11 @@ class Console:
   def info(self, message):
     self.log(32, 'INFO', message)
 
+  def warn(self, message):
+    self.log(35, 'WARN', message)
+
   def error(self, message):
-    self.log(31, 'INFO', message)
+    self.log(31, 'ERROR', message)
 
   def log(self, color, level, message):
     print('\033[' + str(color) + 'm' + level + '\033[0m (build.py): ' + message)
@@ -36,7 +39,8 @@ class Console:
 
 class Command:
   def __init__(self, command_args):
-    self.console = Console(command_args.args.verbose)
+    self.verbose = command_args.args.verbose
+    self.console = Console(self.verbose)
 
   def _run_command(self, command_list, shell=False):
     self.console.v(f"Running `{' '.join(command_list)}`")
@@ -90,12 +94,11 @@ class BuildCommand(Command):
     self.android = command_args.args.android
     self.ios= command_args.args.ios
     self.resources = command_args.args.resources
+    self.build_opencv_libs = command_args.args.build_opencv_libs
     self.include_opencv_libs = command_args.args.include_opencv_libs
 
     self.compilation_mode = command_args.args.compilation_mode
-    self.strip_all = command_args.args.strip_all
-    self.sandbox_debug = command_args.args.sandbox_debug
-    self.verbose_failures = command_args.args.verbose_failures
+    self.linkopt = command_args.args.linkopt
 
   def run(self):
     self.console.info('Building protobuf sources...')
@@ -131,10 +134,13 @@ class BuildCommand(Command):
         os.path.join(_BUILD_PATH, 'Plugins'))
 
       if self.include_opencv_libs:
-        self._run_command(self._build_opencv_libs())
-        self._unzip(
-          os.path.join(_BAZEL_BIN_PATH, 'mediapipe_api', 'opencv_libs.zip'),
-          os.path.join(_BUILD_PATH, 'Plugins', 'OpenCV'))
+        if self.build_opencv_libs == 'static':
+          self.console.warn('OpenCV objects are included in libmediapipe_c, so skip copying OpenCV library files')
+        else:
+          self._run_command(self._build_opencv_libs())
+          self._unzip(
+            os.path.join(_BAZEL_BIN_PATH, 'mediapipe_api', 'opencv_libs.zip'),
+            os.path.join(_BUILD_PATH, 'Plugins', 'OpenCV'))
 
       self.console.info('Built native libraries for Desktop')
 
@@ -173,19 +179,42 @@ class BuildCommand(Command):
       commands += ['--output_user_root', 'C:/_bzl']
 
     commands += ['build', '-c', self.compilation_mode]
+    commands += self._build_linkopt()
 
     if self._is_windows():
       python_bin_path = os.environ['PYTHON_BIN_PATH'].replace('\\', '//')
       commands += ['--action_env', f'PYTHON_BIN_PATH={python_bin_path}']
 
-    if self.strip_all:
-      commands.append('--linkopt=-s')
+    if self.verbose > 1:
+      commands.append('--verbose_failures')
 
-    if self.sandbox_debug:
+    if self.verbose > 2:
       commands.append('--sandbox_debug')
 
-    if self.verbose_failures:
-      commands.append('--verbose_failures')
+    return commands
+
+  def _build_linkopt(self):
+    if self.linkopt is None or len(self.linkopt) == 0:
+      return []
+
+    return ['--linkopt="{}"'.format(' '.join(self.linkopt))]
+
+  def _build_opencv_switch(self):
+    if self.build_opencv_libs is None:
+      return []
+
+    return ['--define', f'build_opencv={self.build_opencv_libs}']
+
+  def _build_desktop_options(self):
+    commands = []
+
+    if self.desktop == 'gpu':
+      commands += ['--copt', '-DMESA_EGL_NO_X11_HEADERS', '--copt', '-DEGL_NO_X11']
+    else:
+      commands += ['--define', 'MEDIAPIPE_DISABLE_GPU=1']
+
+    if self.build_opencv_libs is not None:
+      commands += ['--define', f'build_opencv={self.build_opencv_libs}']
 
     return commands
 
@@ -194,12 +223,7 @@ class BuildCommand(Command):
       return []
 
     commands = self._build_common_commands()
-
-    if self.desktop == 'gpu':
-      commands += ['--copt', '-DMESA_EGL_NO_X11_HEADERS', '--copt', '-DEGL_NO_X11']
-    else:
-      commands += ['--define', 'MEDIAPIPE_DISABLE_GPU=1']
-
+    commands += self._build_desktop_options()
     commands.append('//mediapipe_api:mediapipe_desktop')
     return commands
 
@@ -208,6 +232,7 @@ class BuildCommand(Command):
       return []
 
     commands = self._build_common_commands()
+    commands += self._build_desktop_options()
     commands.append('//mediapipe_api:opencv_libs')
     return commands
 
@@ -329,10 +354,9 @@ class Argument:
     build_command_parser.add_argument('--ios', choices=['arm64'])
     build_command_parser.add_argument('--resources', action=argparse.BooleanOptionalAction, default=True)
     build_command_parser.add_argument('--compilation_mode', '-c', choices=['fastbuild', 'opt', 'debug'], default='opt')
+    build_command_parser.add_argument('--build_opencv_libs', choices=['static', 'shared'], help='Build OpenCV\'s native libraries for Desktop')
     build_command_parser.add_argument('--include_opencv_libs', action='store_true', help='Include OpenCV\'s native libraries for Desktop')
-    build_command_parser.add_argument('--strip_all', '-s', action='store_true', help='Omit all symbol information from the output file')
-    build_command_parser.add_argument('--sandbox_debug', action='store_true')
-    build_command_parser.add_argument('--verbose_failures', action='store_true')
+    build_command_parser.add_argument('--linkopt', '-l', action='append', help='Linker options')
     build_command_parser.add_argument('--verbose', '-v', action='count', default=0)
 
     clean_command_parser = subparsers.add_parser('clean', help='Clean temporary files')

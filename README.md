@@ -64,17 +64,17 @@ Also note that you need to build native libraries for Desktop CPU or GPU to run 
 1. Run [build command](#build-command) inside the container
     ```sh
     # Build native libraries for Desktop CPU.
-    # Note that you need to specify `--include_opencv_libs` if OpenCV 3 is not installed to your host machine.
-    python build.py build --desktop cpu --include_opencv_libs -v
+    # Note that you need to specify `--build_opencv_libs`, because OpenCV is not installed to the container.
+    python build.py build --desktop cpu --build_opencv_libs=static -v
 
     # Build native libraries for Desktop GPU and Android
-    python build.py build --desktop gpu --android arm64 --include_opencv_libs -v
+    python build.py build --desktop gpu --android arm64 --build_opencv_libs=static -v
     ```
 
 If the command finishes successfully, required files will be installed to your host machine.
 
 ### Linux
-1. Install OpenCV
+1. Install OpenCV (optional) and FFmpeg
 
     By default, it is assumed that OpenCV 3 is installed under `/usr` (e.g. `/usr/lib/libopencv_core.so`).\
     If your version or path is different, please edit [third_party/opencv_linux.BUILD](https://github.com/homuler/MediaPipeUnityPlugin/blob/master/third_party/opencv_linux.BUILD) and [WORKSPACE](https://github.com/homuler/MediaPipeUnityPlugin/blob/master/WORKSPACE).
@@ -236,7 +236,7 @@ Installation steps are the same as [Linux](#Linux).
 ### macOS
 1. Install [Homebrew](https://brew.sh)
 
-1. Install OpenCV 3
+1. Install OpenCV 3 (optional) and FFmpeg
     ```sh
     brew install opencv@3
     brew uninstall --ignore-dependencies glog
@@ -281,8 +281,11 @@ Installation steps are the same as [Linux](#Linux).
 # e.g. Desktop GPU only
 python build.py build --desktop gpu -v
 
-# e.g. Include OpenCV libs to `Packages` (for Desktop)
-python build.py build --desktop gpu --include_opencv_libs -v
+# e.g. Build OpenCV static libraries from sources (for Desktop)
+python build.py build --desktop gpu --build_opencv_libs=static -v
+
+# e.g. Build OpenCV shared libraries form sources and copy them to `Packages` (for Desktop).
+python build.py build --desktop gpu --build_opencv_libs=shared --include_opencv_libs -v
 
 # e.g. Desktop CPU and Android
 python build.py build --desktop cpu --android arm64 -v
