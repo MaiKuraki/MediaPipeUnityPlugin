@@ -1,6 +1,8 @@
-package(default_visibility = ["//visibility:public"])
-
 load("@bazel_skylib//lib:selects.bzl", "selects")
+load("@rules_foreign_cc//foreign_cc:defs.bzl", "cmake")
+load("@mediapipe_api//mediapipe_api:defs.bzl", "concat_dict_and_select")
+
+package(default_visibility = ["//visibility:public"])
 
 filegroup(
   name = "all",
@@ -37,9 +39,6 @@ selects.config_setting_group(
     ],
 )
 
-load("@rules_foreign_cc//tools/build_defs:cmake.bzl", "cmake_external")
-load("@mediapipe_api//mediapipe_api:defs.bzl", "concat_dict_and_select")
-
 # Note: this determines the order in which the libraries are passed to the
 # linker, so if library A depends on library B, library B must come _after_.
 # Hence core is at the bottom.
@@ -54,9 +53,7 @@ OPENCV_MODULES = [
     "core",
 ]
 
-OPENCV_SO_VERSION = "3.4"
-
-cmake_external(
+cmake(
     name = "opencv_cmake",
     # Values to be passed as -Dkey=value on the CMake command line;
     # here are serving to provide some CMake script configuration options
@@ -68,11 +65,14 @@ cmake_external(
         "BUILD_TESTS": "OFF",
         "BUILD_PERF_TESTS": "OFF",
         "BUILD_EXAMPLES": "OFF",
+        "BUILD_JPEG": "ON",
+        "BUILD_OPENEXR": "ON",
+        "BUILD_PNG": "ON",
+        "BUILD_TIFF": "ON",
+        "BUILD_ZLIB": "ON",
+        "WITH_1394": "OFF",
         "WITH_ITT": "OFF",
         "WITH_JASPER": "OFF",
-        "WITH_JPEG": "ON",
-        "WITH_PNG": "ON",
-        "WITH_TIFF": "ON",
         "WITH_WEBP": "OFF",
         # Optimization flags
         "CV_ENABLE_INTRINSICS": "ON",
@@ -109,50 +109,59 @@ cmake_external(
         ":build_static_libs": {
             "BUILD_SHARED_LIBS": "OFF",
             "OPENCV_SKIP_VISIBILITY_HIDDEN": "ON",
-            "WITH_IPP": "OFF", # ippicv and ippiw would be excluded and some symbols would be unresolved
+            "WITH_IPP": "OFF", # Some symbols in ippicv and ippiw cannot be resolved, and they are excluded currently in the first place.
         },
     }),
     lib_source = "@opencv//:all",
-    linkopts = select({
-        ":build_static_libs": [
-            # When using static libraries, the binary that eventually depends on the
-            # libraries also needs to link in their dependencies, which therefore
-            # have to be listed here.
-            # This list depends on which dependencies CMake finds when it configures
-            # the build, and so depends on what is installed on the local system.
-            # After building, the linkopts for the current setup can be extracted
-            # from lib/pkgconfig/opencv.pc in bazel-out
-            "-ljpeg",
-            "-lpng",
-            "-lz",
-            "-ltiff",
-            "-lImath",
-            "-lIlmImf",
-            "-lIex",
-            "-lHalf",
-            "-lIlmThread",
-            "-ldc1394",
-            "-lavcodec",
-            "-lavformat",
-            "-lavutil",
-            "-lswscale",
-            "-lavresample",
-            "-ldl",
-            "-lm",
-            "-lpthread",
-            "-lrt",
-        ],
-        "//conditions:default": [],
+    build_args = [
+        "--parallel",
+    ] + select({
+        "@bazel_tools//src/conditions:darwin": ["`sysctl -n hw.ncpu`"],
+        "//conditions:default" : ["`nproc`"],
     }),
-    shared_libraries = select({
+    out_shared_libs = select({
         ":build_dylibs": ["libopencv_%s.dylib" % (module) for module in OPENCV_MODULES],
         ":build_shared_libs": ["libopencv_%s.so" % (module) for module in OPENCV_MODULES],
         "//conditions:default": [],
     }),
-    static_libraries = select({
+    out_static_libs = select({
         ":build_static_libs": ["libopencv_%s.a" % (module) for module in OPENCV_MODULES],
         "//conditions:default": [],
     }),
+)
+
+cc_library(
+    name = "opencv_from_source",
+    srcs = glob(
+        [
+            "lib/*.a",
+            "share/OpenCV/3rdparty/lib/*.a",
+        ],
+    ),
+    hdrs = glob([
+        "include/opencv2/**/*.h*",
+    ]),
+    includes = [
+        "include/",
+    ],
+    linkopts = [
+        "-llibjpeg-turbo",
+        "-llibpng",
+        "-lzlib",
+        "-llibtiff",
+        "-lIlmImf",
+        "-lavcodec",
+        "-lavformat",
+        "-lavutil",
+        "-lswscale",
+        "-lavresample",
+        "-ldl",
+        "-lm",
+        "-lpthread",
+        "-lrt",
+    ],
+    data = [":opencv_gen_dir"],
+    # linkstatic = 1,
 )
 
 filegroup(
@@ -173,6 +182,21 @@ genrule(
     srcs = [":opencv_gen_dir"],
     outs = ["libopencv_%s.a" % module for module in OPENCV_MODULES],
     cmd = "cp $</lib/*.a $(@D)",
+)
+
+genrule(
+    name = "opencv_3rdparty_libs",
+    srcs = [":opencv_gen_dir"],
+    outs = [
+        "libIlmImf.a",
+        "liblibjpeg-turbo.a",
+        "liblibpng.a",
+        "libprotobuf.a",
+        "liblibtiff.a",
+        "libquirc.a",
+        "libzlib.a"
+    ],
+    cmd = "cp $</share/OpenCV/3rdparty/lib/*.a $(@D)",
 )
 
 alias(

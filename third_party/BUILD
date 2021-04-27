@@ -56,7 +56,7 @@ cc_library(
 alias(
     name = "opencv",
     actual = select({
-        "@opencv//:source_build": "@opencv//:opencv_cmake",
+        "@opencv//:source_build": "@opencv//:opencv_from_source",
         "//conditions:default": "@com_google_mediapipe//third_party:opencv_binary",
     }),
 )
